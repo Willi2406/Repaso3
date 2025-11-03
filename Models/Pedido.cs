@@ -14,9 +14,7 @@ namespace Repaso3.Models
         [Required(ErrorMessage = "EL nombre del cliente es obligatorio")]
         public string ClienteNombre { get; set; }
 
-        [Range(1, double.MaxValue, ErrorMessage = "El total debe ser mayor a 0")]
         public decimal Total { get; set; }
-
 
         [ForeignKey("PedidoId")]
         public virtual ICollection<PedidoDetalle> Detalle { get; set; } = new List<PedidoDetalle>();

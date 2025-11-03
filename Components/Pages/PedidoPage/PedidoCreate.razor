@@ -124,7 +124,7 @@
             </div>
 
             <div class="card-footer d-flex gap-2">
-                <a href="/Pedidos/Index" class="btn btn-secondary">
+                <a href="/" class="btn btn-secondary">
                     <span class="bi bi-arrow-left me-1"></span> Volver
                 </a>
 
@@ -218,8 +218,6 @@
         var productoSeleccionado = ProductosDisponibles.FirstOrDefault(t => t.ProductoId == ProductoIdSeleccionado);
         if (productoSeleccionado == null) return;
 
-        // --- VALIDACIÓN DE EXISTENCIA (STOCK) ---
-        // Sumamos la cantidad que ya estaba (si estamos editando) para tener el stock real disponible
         int stockDisponible = productoSeleccionado.Existencia + (DetalleOriginalEnEdicion?.Cantidad ?? 0);
 
         if (DetalleTemporal.Cantidad > stockDisponible)
