@@ -1,0 +1,167 @@
+﻿@page "/"
+@inject PedidoServices pedidosServices
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Gestión de Pedidos</PageTitle>
+
+<div class="container">
+	<div class="card shadow-lg">
+		<div class="card-header">
+			<h5 class="card-title">Gestión de Pedidos</h5>
+			<a href="/Pedidos/Create" class="btn btn-primary">
+				<span class="bi bi-plus-square mt-3"></span> Crear
+			</a>
+		</div>
+
+		<div class="card-body">
+			<div class="row g-3 align-items-end">
+				<div class="col-md-2">
+					<label class="form-label"><strong>Desde</strong></label>
+					<InputDate @bind-Value="FechaDesde" class="form-control" DateFormat="dd/MM/yyyy" />
+				</div>
+
+				<div class="col-md-2">
+					<label class="form-label"><strong>Hasta</strong></label>
+					<InputDate @bind-Value="FechaHasta" class="form-control" DateFormat="dd/MM/yyyy" />
+				</div>
+
+				<div class="mb-3">
+					<label class="form-label"><strong>Filtrar por</strong></label>
+					<InputSelect class="form-select" @bind-Value="Filtro">
+						<option value="" selected disabled>Elegir una opcion</option>
+						<option value="PedidoId">Id</option>
+						<option value="ClienteNombre">Cliente</option>
+						<option value="Total">Total</option>
+					</InputSelect>
+				</div>
+
+				<div class="col-5">
+					<label class="form-label"><strong>Búsqueda</strong></label>
+					<div class="input-group">
+						<input class="form-control" @bind="ValorFiltro" @bind:event="oninput" placeholder="Buscar..." />
+						<button type="button" class="btn btn-outline-primary bi bi-search" @onclick="Buscar"></button>
+						<button type="button" class="btn btn-outline-secondary bi bi-arrow-counterclockwise" @onclick="Limpiar"></button>
+					</div>
+				</div>
+
+				<div class="table-responsive mt-3">
+					<table class="table table-hover">
+						<thead class="table table-striped ">
+							<tr>
+								<th>Fecha</th>
+								<th>ID</th>
+								<th>Cliente</th>
+								<th>Cantidad de Items</th>
+								<th>Total</th>
+								<th>Opciones</th>
+							</tr>
+						</thead>
+						<tbody>
+						@foreach (var p in ListaDePedidos)
+						{
+							<tr>
+								<td>@p.Fecha.ToLocalTime().ToString("yyyy-MM-dd")</td>
+								<th>@p.PedidoId</th>
+								<th>@p.ClienteNombre</th>
+								<th>@p.Detalle.Sum(d => d.Cantidad)</th>
+								<th>@p.Total.ToString("C")</th>
+								<th>
+									<a href="/Pedidos/Edit/@p.PedidoId" class="btn btn-outline-primary bi bi-pencil-square" title="Editar"></a>
+								</th>
+							</tr>
+						}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<div class="card-footer space-between text-end">
+			<span><strong>Cantidad Total de Items:</strong> @ListaDePedidos.Sum(p => p.Detalle.Sum(d => d.Cantidad))</span>
+			<span><strong>Monto Total:</strong> @ListaDePedidos.Sum(p => p.Total).ToString("C")</span>
+		</div>
+	</div>
+</div>
+
+@code
+{
+	public List<Pedido> ListaDePedidos { get; set; } = new List<Pedido>();
+	public string Filtro { get; set; } = string.Empty;
+	public string ValorFiltro { get; set; } = string.Empty;
+	public DateTime? FechaDesde { get; set; }
+	public DateTime? FechaHasta { get; set; }
+
+	protected override async Task OnInitializedAsync()
+	{
+		
+		ListaDePedidos = await pedidosServices.Listar(p => p.PedidoId > 0);
+	}
+
+	private async Task Buscar()
+	{
+		// Lógica de reseteo
+		if (string.IsNullOrWhiteSpace(Filtro) && !FechaDesde.HasValue && !FechaHasta.HasValue)
+		{
+			ListaDePedidos = await pedidosServices.Listar(p => p.PedidoId > 0);
+			return;
+		}
+
+		// Lógica de búsqueda por fecha (tiene prioridad)
+		if (FechaDesde.HasValue || FechaHasta.HasValue)
+		{
+			var datos = await pedidosServices.Listar(p => p.PedidoId > 0);
+
+			if (FechaDesde.HasValue && FechaHasta.HasValue)
+			{
+				ListaDePedidos = datos
+					.Where(p => p.Fecha.Date >= FechaDesde.Value.Date && p.Fecha.Date <= FechaHasta.Value.Date)
+					.ToList();
+			}
+			else if (FechaDesde.HasValue)
+			{
+				ListaDePedidos = datos
+					.Where(p => p.Fecha.Date >= FechaDesde.Value.Date)
+					.ToList();
+			}
+			else if (FechaHasta.HasValue)
+			{
+				ListaDePedidos = datos
+					.Where(p => p.Fecha.Date <= FechaHasta.Value.Date)
+					.ToList();
+			}
+			return;
+		}
+
+		// Lógica de búsqueda por filtros de texto
+		if (Filtro == "ClienteNombre" && !string.IsNullOrWhiteSpace(ValorFiltro))
+		{
+			var v = ValorFiltro.Trim().ToLower();
+			// Filtramos por ClienteNombre
+			ListaDePedidos = await pedidosServices.Listar(p => (p.ClienteNombre ?? "").ToLower().Contains(v));
+		}
+		else if (Filtro == "PedidoId" && int.TryParse(ValorFiltro, out var PedidoId))
+		{
+			// Filtramos por PedidoId
+			ListaDePedidos = await pedidosServices.Listar(p => p.PedidoId == PedidoId);
+		}
+		else if (Filtro == "Total" && decimal.TryParse(ValorFiltro, out var Total))
+		{
+			// Filtramos por Total
+			ListaDePedidos = await pedidosServices.Listar(p => p.Total == Total);
+		}
+		else
+		{
+			// Reseteo si el filtro no es válido
+			ListaDePedidos = await pedidosServices.Listar(p => p.PedidoId > 0);
+		}
+	}
+	
+	private async Task Limpiar()
+	{
+		Filtro = string.Empty;
+		ValorFiltro = string.Empty;
+		FechaDesde = null;
+		FechaHasta = null;
+		ListaDePedidos = await pedidosServices.Listar(p => p.PedidoId > 0);
+	}
+}

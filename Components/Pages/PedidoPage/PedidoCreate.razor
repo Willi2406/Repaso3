@@ -1,0 +1,281 @@
+﻿@page "/Pedidos/Create"
+@page "/Pedidos/Edit/{PedidoId:int}"
+
+@* Inyectamos los servicios necesarios *@
+@inject PedidoServices pedidosServices
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+@* Título de la página dinámico *@
+<PageTitle>@(PedidoId > 0 ? "Editar Pedido" : "Crear Pedido")</PageTitle>
+
+<EditForm Model="pedido" OnValidSubmit="Guardar">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="container">
+        <div class="card shadow-lg">
+            <div class="card-header">
+                @* Título de la tarjeta dinámico *@
+                <h5 class="card-title m-0">@(PedidoId > 0 ? $"Editar Pedido: {PedidoId}" : "Registrar Pedido")</h5>
+            </div>
+
+            <div class="card-body">
+
+                <div class="col-md-3 mb-3">
+                    <label class="form-label"><strong>Fecha</strong></label>
+                    <InputDate class="form-control" @bind-Value="pedido.Fecha" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label"><strong>Nombre del Cliente</strong></label>
+                    <InputText class="form-control" @bind-Value="pedido.ClienteNombre" />
+                    <ValidationMessage For="() => pedido.ClienteNombre" />
+                </div>
+
+                <div class="border border-success p-3 mt-3">
+                    <h5>Productos del Pedido</h5>
+
+                    <div class="row g-3 mb-3 align-items-end">
+
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Producto</strong></label>
+                            <InputSelect class="form-select" @bind-Value="ProductoIdSeleccionado">
+                                <option value="0" selected disabled>Seleccione un producto</option>
+                                @foreach (var producto in ProductosDisponibles)
+                                {
+                                    <option value="@producto.ProductoId">@producto.Descripcion (Stock: @producto.Existencia)</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="form-label"><strong>Cantidad</strong></label>
+                            <InputNumber class="form-control" @bind-Value="DetalleTemporal.Cantidad" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <label class="form-label"><strong>Precio</strong></label>
+                            <InputNumber class="form-control" @bind-Value="DetalleTemporal.Precio" />
+                        </div>
+
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-success w-100" @onclick="AgregarDetalle">
+                                <span class="bi bi-plus-circle me-1"></span> Agregar
+                            </button>
+                        </div>
+                    </div>
+
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Cantidad</th>
+                                <th>Precio Unit.</th>
+                                <th>Importe</th>
+                                <th>Opciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (pedido.Detalle.Any())
+                            {
+                                @foreach (var detalle in pedido.Detalle)
+                                {
+                                    <tr>
+                                        @* Buscamos la descripción del producto en la lista cargada *@
+                                        <td>@(ProductosDisponibles.FirstOrDefault(t => t.ProductoId == detalle.ProductoId)?.Descripcion)</td>
+                                        <td>@detalle.Cantidad</td>
+                                        <td>@detalle.Precio.ToString("C")</td>
+                                        <td>@((detalle.Cantidad * detalle.Precio).ToString("C"))</td>
+                                        <td class="text-center">
+                                            @* Botón para cargar el detalle a los inputs de arriba *@
+                                            <button type="button" class="btn btn-sm btn-warning bi bi-pencil" @onclick="() => CargarDetalleParaEdicion(detalle)">
+                                            </button>
+
+                                            <button type="button" class="btn btn-sm btn-danger bi bi-trash" @onclick="() => RemoverDetalle(detalle)">
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">Aún no se han agregado productos al pedido.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="row pt-2 justify-content-end">
+                        <div class="col-auto">
+                            <div class="text-end">
+                                <h6 class="mb-1">
+                                    <span><strong>Total de Items:</strong> @CantidadTotalDetalle</span>
+                                </h6>
+                                <h6 class="mb-0">
+                                    <span><strong>Monto total:</strong> @MontoTotal.ToString("C")</span>
+                                </h6>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="card-footer d-flex gap-2">
+                <a href="/Pedidos/Index" class="btn btn-secondary">
+                    <span class="bi bi-arrow-left me-1"></span> Volver
+                </a>
+
+                <button type="submit" class="btn btn-primary">
+                    <span class="bi bi-floppy me-1"></span> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter]
+    public int PedidoId { get; set; }
+
+    public Pedido pedido { get; set; } = new Pedido() { Detalle = new List<PedidoDetalle>() };
+
+    public List<Productos> ProductosDisponibles { get; set; } = new List<Productos>();
+    public PedidoDetalle DetalleTemporal { get; set; } = new PedidoDetalle();
+    public int ProductoIdSeleccionado { get; set; }
+
+    // Almacena temporalmente el detalle que se está editando para poder removerlo
+    public PedidoDetalle? DetalleOriginalEnEdicion { get; set; }
+
+    public decimal MontoTotal => pedido.Detalle.Sum(d => d.Cantidad * d.Precio);
+    public int CantidadTotalDetalle => pedido.Detalle.Sum(d => d.Cantidad);
+
+    private string Titulo = "Crear Pedido";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Cargar la lista de productos siempre
+        ProductosDisponibles = await pedidosServices.GetProductos();
+
+        if (PedidoId > 0)
+        {
+            // Estamos Editando: Buscar el pedido existente
+            var pedidoEncontrado = await pedidosServices.Buscar(PedidoId);
+            if (pedidoEncontrado != null)
+            {
+                pedido = pedidoEncontrado;
+                Titulo = "Editar Pedido";
+            }
+            else
+            {
+                // No se encontró el pedido, ir a Crear
+                await JSRuntime.InvokeVoidAsync("alert", "Pedido no encontrado. Se redirigió a Crear.");
+                Navigation.NavigateTo("/Pedidos/Create");
+            }
+        }
+        else
+        {
+            // Estamos Creando: Inicializar un pedido nuevo
+            pedido = new Pedido() { Detalle = new List<PedidoDetalle>() };
+            pedido.Fecha = DateTime.Now;
+            Titulo = "Crear Pedido";
+        }
+    }
+
+    public async Task CargarDetalleParaEdicion(PedidoDetalle detalle)
+    {
+        // Almacena la referencia original para poder removerla al "Agregar" (actualizar)
+        DetalleOriginalEnEdicion = detalle;
+
+        // Carga los datos del detalle en los inputs
+        ProductoIdSeleccionado = detalle.ProductoId;
+        DetalleTemporal.Cantidad = detalle.Cantidad;
+        DetalleTemporal.Precio = detalle.Precio;
+
+        await JSRuntime.InvokeVoidAsync("alert", "Detalle cargado. Modifique y presione 'Agregar' para guardar.");
+    }
+
+    public async Task AgregarDetalle()
+    {
+        if (ProductoIdSeleccionado <= 0)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Debe seleccionar un producto.");
+            return;
+        }
+        if (DetalleTemporal.Cantidad <= 0)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "La cantidad debe ser mayor a cero.");
+            return;
+        }
+        if (DetalleTemporal.Precio <= 0)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Debe ingresar un precio mayor a cero.");
+            return;
+        }
+
+        var productoSeleccionado = ProductosDisponibles.FirstOrDefault(t => t.ProductoId == ProductoIdSeleccionado);
+        if (productoSeleccionado == null) return;
+
+        // --- VALIDACIÓN DE EXISTENCIA (STOCK) ---
+        // Sumamos la cantidad que ya estaba (si estamos editando) para tener el stock real disponible
+        int stockDisponible = productoSeleccionado.Existencia + (DetalleOriginalEnEdicion?.Cantidad ?? 0);
+
+        if (DetalleTemporal.Cantidad > stockDisponible)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"No hay suficiente stock. Stock disponible: {stockDisponible}");
+            return;
+        }
+
+        // Si estábamos editando un detalle, lo removemos de la lista
+        if (DetalleOriginalEnEdicion != null)
+        {
+            pedido.Detalle.Remove(DetalleOriginalEnEdicion);
+            DetalleOriginalEnEdicion = null; // Limpiamos la referencia
+        }
+
+        var nuevoDetalle = new PedidoDetalle
+        {
+            ProductoId = ProductoIdSeleccionado,
+            Cantidad = DetalleTemporal.Cantidad,
+            Precio = DetalleTemporal.Precio,
+            PedidoId = pedido.PedidoId
+        };
+
+        pedido.Detalle.Add(nuevoDetalle);
+
+        // Limpiamos los inputs
+        ProductoIdSeleccionado = 0;
+        DetalleTemporal = new PedidoDetalle();
+    }
+
+    public async Task RemoverDetalle(PedidoDetalle detalle)
+    {
+        pedido.Detalle.Remove(detalle);
+        await JSRuntime.InvokeVoidAsync("alert", "Producto eliminado del pedido.");
+    }
+
+    private async Task Guardar()
+    {
+        // Actualizamos el total del pedido principal
+        pedido.Total = MontoTotal;
+
+        if (!pedido.Detalle.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Debe agregar al menos un producto al pedido.");
+            return;
+        }
+
+        var guardado = await pedidosServices.Guardar(pedido);
+        if (guardado)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Pedido guardado con éxito!!");
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "No se pudo guardar el pedido.");
+        }
+    }
+}
