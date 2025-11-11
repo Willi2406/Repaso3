@@ -1,15 +1,11 @@
 ﻿@page "/Pedidos/Create"
 @page "/Pedidos/Edit/{PedidoId:int}"
-
-@* Inyectamos los servicios necesarios *@
 @inject PedidoServices pedidosServices
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
-@* Título de la página dinámico *@
 <PageTitle>@(PedidoId > 0 ? "Editar Pedido" : "Crear Pedido")</PageTitle>
-
 <EditForm Model="pedido" OnValidSubmit="Guardar">
     <DataAnnotationsValidator />
     <ValidationSummary />
@@ -17,7 +13,6 @@
     <div class="container">
         <div class="card shadow-lg">
             <div class="card-header">
-                @* Título de la tarjeta dinámico *@
                 <h5 class="card-title m-0">@(PedidoId > 0 ? $"Editar Pedido: {PedidoId}" : "Registrar Pedido")</h5>
             </div>
 

@@ -78,7 +78,6 @@
 		</div>
 		<div class="card-footer space-between text-end">
 			<span><strong>Cantidad Total de Items:</strong> @ListaDePedidos.Sum(p => p.Detalle.Sum(d => d.Cantidad))</span>
-			<span><strong>Monto Total:</strong> @ListaDePedidos.Sum(p => p.Total).ToString("C")</span>
 		</div>
 	</div>
 </div>
